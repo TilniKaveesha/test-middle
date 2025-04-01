@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum Day {
+  Monday
+  Tuesday
+  Wednesday
+  Thursday
+  Friday
+  Saturday
+  Sunday
+}
+
+enum Stream {
+  MATHS
+  BIO
+}
+
+model Admin {
+  id       String  @id
+  username String  @unique
+  exams    Exam[]
+}
+
+model Suser {
+  NIC         String   @id 
+  username    String   @unique
+  FirstName   String
+  LastName    String
+  Email       String @unique
+  Password    String 
+  school      String
+  PhoneNumber String @unique
+  Address     String?
+  gender      Gender
+  img         String?
+  CreatedAt   DateTime @default(now())
+  stream      Stream   // ✅ Suser must choose either Maths or Bio
+  users       User[]   // ✅ One Suser has multiple Users
+  subjects    Subject[] @relation("SuserSubjects") // ✅ Susers get assigned common + stream subjects
+  exams       Exam[]    @relation("SuserExam") // ✅ Susers participate in exams
+  results     result[]
+  refreshTokens RefreshToken[]
+  role        String   @default("suser")
+}
+
+model User {
+  NIC         String   @id 
+  FirstName   String
+  LastName    String
+  Email       String @unique
+  Password    String 
+  PhoneNumber String @unique
+  Address     String
+  gender      Gender
+  CreatedAt   DateTime @default(now())
+  suserID     String   
+  suser       Suser    @relation(fields: [suserID], references: [NIC], onDelete: Cascade)
+  stream      Stream   // ✅ Users inherit stream from Suser
+  subjects    Subject[] @relation("UserSubjects") // ✅ Users get same subjects as their Suser
+  exams       Exam[]    @relation("UserExam") // ✅ Users participate in exams
+  results     result[] 
+  refreshTokens RefreshToken[]
+  role String @default("user")
+}
+
+model Subject {
+  id       Int      @id @default(autoincrement())
+  name     String   @unique
+  stream   Stream?  // ✅ NULL means it's a common subject, otherwise it's stream-specific
+  exams    Exam[]   
+  susers   Suser[]  @relation("SuserSubjects") // ✅ Susers study this subject
+  users    User[]   @relation("UserSubjects")  // ✅ Users study this subject
+}
+
+model Exam {
+  id         Int       @id @default(autoincrement())
+  name       String
+  date       DateTime
+  startTime  DateTime
+  endTime    DateTime
+  Day        Day
+  subjectId  Int
+  subject    Subject   @relation(fields: [subjectId], references: [id]) 
+  adminId    String
+  admin      Admin     @relation(fields: [adminId], references: [id])  
+  susers     Suser[]   @relation("SuserExam") // ✅ Susers participate in relevant subject exams
+  users      User[]    @relation("UserExam")  // ✅ Users participate in relevant subject exams
+  results    result[]
+  events     event[]   // ✅ Events related to this exam
+  announcements announcement[]
+}
+
+model result {
+  id        Int        @id @default(autoincrement())
+  score     Float      // Exam score
+  status    ExamStatus // Pass/Fail/Absent (using ENUM)
+  examId    Int       
+  exam      Exam       @relation(fields: [examId], references: [id]) 
+  userId    String?    // Nullable because either userId OR suserId will be filled
+  user      User?      @relation(fields: [userId], references: [NIC])  
+  suserId   String?    // Nullable because either userId OR suserId will be filled
+  suser     Suser?     @relation(fields: [suserId], references: [NIC])  
+  createdAt DateTime   @default(now())
+}
+
+model event {
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String
+  startTime   DateTime // Add startTime field here
+  examid      Int?
+  exam        Exam?     @relation(fields: [examid], references: [id])
+}
+
+model announcement {
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String
+  examid      Int?
+  exam        Exam?     @relation(fields: [examid], references: [id])
+  createdAt   DateTime  @default(now())  // Add this line to track the creation date
+}
+
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  token      String   @unique
+  NIC        String
+  user       User?    @relation(fields: [NIC], references: [NIC], onDelete: Cascade, map: "RefreshToken_User_NIC_fkey")
+  suser      Suser?   @relation(fields: [NIC], references: [NIC], onDelete: Cascade, map: "RefreshToken_Suser_NIC_fkey")
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+}
+
+enum ExamStatus {
+  PASS
+  FAIL
+  ABSENT
+}
